@@ -172,3 +172,34 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# === ARCHIVOS DE OFFICE ===
+
+# Excel files - extensiones básicas
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+
+# Excel files - case insensitive (alternativa)
+*.[Xx][Ll][Ss]
+*.[Xx][Ll][Ss][Xx]
+*.[Xx][Ll][Ss][Mm]
+*.[Xx][Ll][Ss][Bb]
+
+# PDF files
+*.pdf
+*.PDF
+*.[Pp][Dd][Ff]
+
+# Excel temporary files (IMPORTANTE)
+~$*.xls*
+*.xlk
+
+# Archivos de backup automático de Excel
+Backup of *.xls*
+
+# Archivos temporales generales de Office
+*.tmp
+~$*.doc*
+~$*.ppt*
