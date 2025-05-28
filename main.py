@@ -335,11 +335,57 @@ def ajustar_diseno_excel(ws):
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
 
 def procesar_excel(excel_file, output_pdf, imagen):
+    # FUNCIÓN AUXILIAR para convertir números argentinos
+    def convertir_numero_argentino(valor_str):
+        """
+        Convierte números en formato argentino a float.
+        Ejemplos:
+        - "63.133,14" -> 63133.14
+        - "151,61" -> 151.61
+        - "1.234.567,89" -> 1234567.89
+        - "0,00" -> 0.0
+        """
+        try:
+            if not valor_str or valor_str in ['', ' ', None]:
+                return 0.0
+            
+            # Convertir a string y limpiar espacios
+            valor_str = str(valor_str).strip()
+            
+            # Si contiene tanto punto como coma (formato: 63.133,14)
+            if '.' in valor_str and ',' in valor_str:
+                # Los puntos son separadores de miles, la coma es decimal
+                valor_str = valor_str.replace('.', '')  # Eliminar puntos (miles)
+                valor_str = valor_str.replace(',', '.')  # Convertir coma a punto (decimal)
+            
+            # Si solo contiene coma (formato: 151,61)
+            elif ',' in valor_str and '.' not in valor_str:
+                # La coma es el separador decimal
+                valor_str = valor_str.replace(',', '.')
+            
+            # Si solo contiene punto o ninguno, asumir que ya está en formato correcto
+            
+            return float(valor_str)
+        
+        except (ValueError, TypeError, AttributeError):
+            return 0.0
+
     try:
         # Ignorar archivos temporales de Excel que comienzan con ~$
         if os.path.basename(excel_file).startswith('~$'):
             print(f"Omitiendo archivo temporal: {excel_file}")
             return
+
+        # Extraer el nombre del cliente desde el nombre del archivo
+        nombre_archivo = os.path.basename(excel_file)
+        # Asumiendo que el formato es "Reporte - NOMBRE_CLIENTE.xlsx"
+        if " - " in nombre_archivo:
+            cliente = nombre_archivo.split(" - ")[1].replace(".xlsx", "")
+        else:
+            # Fallback si el formato es diferente
+            cliente = nombre_archivo.replace(".xlsx", "")
+        
+        print(f"Procesando cliente: {cliente}")
 
         # Cargar el archivo Excel con pandas
         df = pd.read_excel(excel_file)
@@ -366,7 +412,11 @@ def procesar_excel(excel_file, output_pdf, imagen):
 
         # Obtener la fecha actual y el año actual
         fecha_actual = pd.Timestamp.now().date()
+        año_actual = fecha_actual.year
+        fecha_inicio = pd.Timestamp(year=año_actual - 7, month=1, day=1).date()  # 1 de enero de 8 años atrás
         
+        print(f"Rango de fechas: desde {fecha_inicio} hasta {fecha_actual}")
+
         # Identificar el nombre correcto de la columna de fecha
         columna_fecha_encontrada = None
         posibles_columnas_fecha = ['FechaVencimiento', 'Fecha de Vencimiento', 'Fecha Vencimiento']
@@ -395,7 +445,8 @@ def procesar_excel(excel_file, output_pdf, imagen):
             # Aplicar filtro solo por fecha
             df_filtrado = df_filtrado[
                 mascara_fechas_validas & 
-                (df_filtrado['fecha_procesada'] < fecha_actual)
+                (df_filtrado['fecha_procesada'] >= fecha_inicio) &
+                (df_filtrado['fecha_procesada'] <= fecha_actual)
             ]
             
             print(f"Registros después de filtrar por fecha: {len(df_filtrado)}")
@@ -411,7 +462,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
             output_pdf = output_pdf.replace(".pdf", " - vacio.pdf")
             print(f"No se encontraron registros que cumplan con los criterios en {excel_file}")
 
-        # Eliminar solo la columna de Int. punitorios
+        # Eliminar la columna de Int. punitorios y concepto / subconcepto
         columnas_a_eliminar = ['Int. punitorios', 'Concepto / Subconcepto']
         for columna in columnas_a_eliminar:
             if columna in df_filtrado.columns:
@@ -455,7 +506,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
 
         # Establecer el texto en la celda combinada
         celda_texto = ws[f'A{fila_texto}']
-        celda_texto.value = "Reporte de deudas"
+        celda_texto.value = f"Reporte de deudas del SCT - {cliente} "
 
         # Aplicar formato centrado y en negrita
         celda_texto.alignment = Alignment(horizontal='center', vertical='center')
@@ -466,21 +517,102 @@ def procesar_excel(excel_file, output_pdf, imagen):
         for cell in ws[9]:
             cell.fill = header_fill
 
-        # Ajustar el ancho de las columnas automáticamente, pero individualmente
+        # Ajustar el ancho de las columnas con control específico para "Impuesto"
         for col in ws.columns:
             max_length = 0
             column = col[0].column_letter  # Get the column name
+            column_header = ""
+            
+            # Obtener el nombre del encabezado de la columna
             for cell in col:
+                if cell.row == 9 and cell.value:  # Fila 9 es donde están los encabezados
+                    column_header = str(cell.value).lower()
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            # Ajuste del ancho de cada columna basado en el contenido más largo
-            adjusted_width = (max_length + 2) * 1.2  # 1.2 para un poco de margen adicional
+            
+            # Ajuste especial para la columna "Impuesto"
+            if "impuesto" in column_header:
+                # Limitar el ancho máximo de la columna Impuesto a 35 caracteres
+                adjusted_width = min(35, (max_length + 2) * 1.2)
+            else:
+                # Para el resto de columnas, usar el cálculo normal
+                adjusted_width = (max_length + 2) * 1.2
+            
             ws.column_dimensions[column].width = adjusted_width
 
-        # Centrar el contenido de todas las celdas
+        # Encontrar las columnas "Fecha de Vencimiento", "Saldo" e "Int. resarcitorios" para totales y alineación
+        fecha_vencimiento_col = None
+        saldo_col = None
+        int_resarcitorios_col = None
+        columnas_derecha = []
+        header_row = 9  # Fila donde están los encabezados
+        
+        for col_num, cell in enumerate(ws[header_row], 1):
+            if cell.value and isinstance(cell.value, str):
+                cell_value_lower = cell.value.lower()
+                
+                # Buscar columna Fecha de Vencimiento
+                if any(term in cell_value_lower for term in ['fecha de vencimiento', 'fechavencimiento', 'vencimiento']):
+                    fecha_vencimiento_col = col_num
+                
+                # Buscar columna Saldo
+                elif 'saldo' in cell_value_lower:
+                    saldo_col = col_num
+                    columnas_derecha.append(col_num)
+                
+                # Buscar columna Int. resarcitorios
+                elif any(term in cell_value_lower for term in ['int. resarcitorios', 'int.resarcitorios', 'resarcitorios']):
+                    int_resarcitorios_col = col_num
+                    columnas_derecha.append(col_num)
+        
+        # Aplicar alineación a todas las celdas
         for row in ws.iter_rows(min_row=9, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-            for cell in row:
-                cell.alignment = Alignment(horizontal='center', vertical='center')
+            for col_num, cell in enumerate(row, 1):
+                if col_num in columnas_derecha:
+                    # Alinear a la derecha las columnas de Saldo e Int. resarcitorios
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                else:
+                    # Centrar el resto de columnas
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Encontrar la última fila con datos y agregar fila de totales
+        ultima_fila_datos = ws.max_row
+        fila_total = ultima_fila_datos + 1
+        
+        # Agregar "TOTAL" en la columna de fecha de vencimiento
+        if fecha_vencimiento_col:
+            celda_total = ws.cell(row=fila_total, column=fecha_vencimiento_col)
+            celda_total.value = "TOTAL"
+            celda_total.font = Font(bold=True)
+            celda_total.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Calcular y agregar sumatoria de Saldo
+        if saldo_col:
+            suma_saldo = 0
+            for fila in range(10, ultima_fila_datos + 1):  # Desde fila 10 hasta la última
+                celda_saldo = ws.cell(row=fila, column=saldo_col)
+                if celda_saldo.value:
+                    suma_saldo += convertir_numero_argentino(celda_saldo.value)
+            
+            # Insertar la suma en la fila total
+            celda_suma_saldo = ws.cell(row=fila_total, column=saldo_col)
+            celda_suma_saldo.value = round(suma_saldo, 2)
+            celda_suma_saldo.font = Font(bold=True)
+            celda_suma_saldo.alignment = Alignment(horizontal='right', vertical='center')
+
+        # Calcular y agregar sumatoria de Int. resarcitorios
+        if int_resarcitorios_col:
+            suma_int_resarcitorios = 0
+            for fila in range(10, ultima_fila_datos + 1):  # Desde fila 10 hasta la última
+                celda_int = ws.cell(row=fila, column=int_resarcitorios_col)
+                if celda_int.value:
+                    suma_int_resarcitorios += convertir_numero_argentino(celda_int.value)
+            
+            # Insertar la suma en la fila total
+            celda_suma_int = ws.cell(row=fila_total, column=int_resarcitorios_col)
+            celda_suma_int.value = round(suma_int_resarcitorios, 2)
+            celda_suma_int.font = Font(bold=True)
+            celda_suma_int.alignment = Alignment(horizontal='right', vertical='center')
 
         # Guardar los cambios
         wb.save(excel_file)
@@ -525,7 +657,6 @@ def procesar_excel(excel_file, output_pdf, imagen):
     finally:
         if 'excel' in locals():
             excel.Quit()
-
 
 # Recorrer todos los archivos Excel en la carpeta
 for excel_file in glob.glob(os.path.join(input_folder_excel, "*.xlsx")):
