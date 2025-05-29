@@ -335,16 +335,8 @@ def ajustar_diseno_excel(ws):
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
 
 def procesar_excel(excel_file, output_pdf, imagen):
-    # FUNCIÓN AUXILIAR para convertir números argentinos
-    def convertir_numero_argentino(valor_str):
-        """
-        Convierte números en formato argentino a float.
-        Ejemplos:
-        - "63.133,14" -> 63133.14
-        - "151,61" -> 151.61
-        - "1.234.567,89" -> 1234567.89
-        - "0,00" -> 0.0
-        """
+    # FUNCIÓN AUXILIAR para convertir números argentinos a float 
+    def convertir_numero_argentino(valor_str): 
         try:
             if not valor_str or valor_str in ['', ' ', None]:
                 return 0.0
@@ -362,13 +354,43 @@ def procesar_excel(excel_file, output_pdf, imagen):
             elif ',' in valor_str and '.' not in valor_str:
                 # La coma es el separador decimal
                 valor_str = valor_str.replace(',', '.')
-            
             # Si solo contiene punto o ninguno, asumir que ya está en formato correcto
-            
             return float(valor_str)
         
         except (ValueError, TypeError, AttributeError):
             return 0.0
+     
+    def formatear_numero_argentino(numero): #Convierte un número float al formato argentino.
+        try:
+            if numero == 0:
+                return "0,00"
+            
+            # Convertir a string con 2 decimales
+            numero_str = f"{numero:.2f}"
+            
+            # Separar parte entera y decimal
+            if '.' in numero_str:
+                parte_entera, parte_decimal = numero_str.split('.')
+            else:
+                parte_entera = numero_str
+                parte_decimal = "00"
+            
+            # Formatear la parte entera con puntos cada 3 dígitos (de derecha a izquierda)
+            if len(parte_entera) > 3:
+                # Invertir, agregar puntos cada 3, volver a invertir
+                parte_entera_invertida = parte_entera[::-1]
+                parte_entera_con_puntos = ''
+                for i, digito in enumerate(parte_entera_invertida):
+                    if i > 0 and i % 3 == 0:
+                        parte_entera_con_puntos += '.'
+                    parte_entera_con_puntos += digito
+                parte_entera = parte_entera_con_puntos[::-1]
+            
+            # Combinar con coma como separador decimal
+            return f"{parte_entera},{parte_decimal}"
+        
+        except (ValueError, TypeError):
+            return "0,00"
 
     try:
         # Ignorar archivos temporales de Excel que comienzan con ~$
@@ -398,7 +420,8 @@ def procesar_excel(excel_file, output_pdf, imagen):
             'sicore-impto.a las ganancias',
             'empleador-aportes seg. social',
             'contribuciones seg. social',
-            'ret art 79 ley gcias in a,byc'
+            'ret art 79 ley gcias in a,byc',
+            'renatea'
         ]
 
         # Filtrar por múltiples tipos de "Impuesto"
@@ -589,28 +612,48 @@ def procesar_excel(excel_file, output_pdf, imagen):
         # Calcular y agregar sumatoria de Saldo
         if saldo_col:
             suma_saldo = 0
-            for fila in range(10, ultima_fila_datos + 1):  # Desde fila 10 hasta la última
+            valores_sumados = []  # Para diagnóstico
+            
+            for fila in range(10, ultima_fila_datos + 1):
                 celda_saldo = ws.cell(row=fila, column=saldo_col)
                 if celda_saldo.value:
-                    suma_saldo += convertir_numero_argentino(celda_saldo.value)
+                    valor_original = celda_saldo.value
+                    valor_convertido = convertir_numero_argentino(celda_saldo.value)
+                    suma_saldo += valor_convertido
+                    
+                    # Diagnóstico para verificar que suma números pequeños
+                    valores_sumados.append(f"{valor_original} -> {valor_convertido}")
             
-            # Insertar la suma en la fila total
+            print(f"Valores de Saldo sumados: {valores_sumados}")
+            print(f"Total Saldo: {suma_saldo}")
+            
+            # Insertar la suma en la fila total con formato argentino
             celda_suma_saldo = ws.cell(row=fila_total, column=saldo_col)
-            celda_suma_saldo.value = round(suma_saldo, 2)
+            celda_suma_saldo.value = formatear_numero_argentino(suma_saldo)
             celda_suma_saldo.font = Font(bold=True)
             celda_suma_saldo.alignment = Alignment(horizontal='right', vertical='center')
 
-        # Calcular y agregar sumatoria de Int. resarcitorios
+        # Calcular y agregar sumatoria de Int. resarcitorios  
         if int_resarcitorios_col:
             suma_int_resarcitorios = 0
-            for fila in range(10, ultima_fila_datos + 1):  # Desde fila 10 hasta la última
+            valores_int_sumados = []  # Para diagnóstico
+            
+            for fila in range(10, ultima_fila_datos + 1):
                 celda_int = ws.cell(row=fila, column=int_resarcitorios_col)
                 if celda_int.value:
-                    suma_int_resarcitorios += convertir_numero_argentino(celda_int.value)
+                    valor_original = celda_int.value
+                    valor_convertido = convertir_numero_argentino(celda_int.value)
+                    suma_int_resarcitorios += valor_convertido
+                    
+                    # Diagnóstico para verificar que suma números pequeños
+                    valores_int_sumados.append(f"{valor_original} -> {valor_convertido}")
             
-            # Insertar la suma en la fila total
+            print(f"Valores de Int. Resarcitorios sumados: {valores_int_sumados}")
+            print(f"Total Int. Resarcitorios: {suma_int_resarcitorios}")
+            
+            # Insertar la suma en la fila total con formato argentino
             celda_suma_int = ws.cell(row=fila_total, column=int_resarcitorios_col)
-            celda_suma_int.value = round(suma_int_resarcitorios, 2)
+            celda_suma_int.value = formatear_numero_argentino(suma_int_resarcitorios)
             celda_suma_int.font = Font(bold=True)
             celda_suma_int.alignment = Alignment(horizontal='right', vertical='center')
 
