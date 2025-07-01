@@ -67,7 +67,7 @@ resultados = []
 def human_typing(element, text):
     for char in str(text):
         element.send_keys(char)
-        time.sleep(random.uniform(0.05, 0.3))
+        time.sleep(random.uniform(0.02, 0.15))
 
 def actualizar_excel(row_index, mensaje):
     """Actualiza la última columna del archivo Excel con un mensaje de error."""
@@ -80,11 +80,11 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
         driver.get('https://auth.afip.gob.ar/contribuyente_/login.xhtml')
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:username')))
         element.clear()
-        time.sleep(5)
+        time.sleep(3)
 
         human_typing(element, cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(5)
+        time.sleep(2)
 
         # Verificar si el CUIT es incorrecto
         try:
@@ -97,9 +97,9 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
 
         element_pass = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:password')))
         human_typing(element_pass, password)
-        time.sleep(15)
+        time.sleep(8)
         driver.find_element(By.ID, 'F1:btnIngresar').click()
-        time.sleep(5)
+        time.sleep(3)
 
         # Verificar si la contraseña es incorrecta
         try:
@@ -123,19 +123,19 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     boton_ver_todos = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Ver todos")))
     if boton_ver_todos:
         boton_ver_todos.click()
-        time.sleep(5)
+        time.sleep(3)
 
     # Buscar input del buscador y escribir
     buscador = driver.find_element(By.ID, 'buscadorInput')
     if buscador:
         human_typing(buscador, 'tas tr') 
-        time.sleep(5)
+        time.sleep(3)
 
     # Seleccionar la opción del menú
     opcion_menu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'rbt-menu-item-0')))
     if opcion_menu:
         opcion_menu.click()
-        time.sleep(10)
+        time.sleep(4)
 
     # Manejar modal si aparece
     modales = driver.find_elements(By.CLASS_NAME, 'modal-content')
@@ -143,7 +143,7 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
         boton_continuar = driver.find_element(By.XPATH, '//button[text()="Continuar"]')
         if boton_continuar:
             boton_continuar.click()
-            time.sleep(5)
+            time.sleep(3)
 
     # Cambiar a la última pestaña abierta
     driver.switch_to.window(driver.window_handles[-1])
@@ -153,23 +153,23 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     if error_message_elements and error_message_elements[0].text == "Ha ocurrido un error al autenticar, intente nuevamente.":
         actualizar_excel(row_index, "Error autenticacion")
         driver.refresh()
-        time.sleep(5)
+        time.sleep(3)
 
     # Verificar si es necesario iniciar sesión nuevamente
     username_input = driver.find_elements(By.ID, 'F1:username')
     if username_input:
         username_input[0].clear()
-        time.sleep(5)
+        time.sleep(3)
         human_typing(username_input[0], cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(5)
+        time.sleep(3)
 
         password_input = driver.find_elements(By.ID, 'F1:password')
         if password_input:
             human_typing(password_input[0], password)
-            time.sleep(15)
+            time.sleep(7)
             driver.find_element(By.ID, 'F1:btnIngresar').click()
-            time.sleep(5)
+            time.sleep(3)
             actualizar_excel(row_index, "Error volver a iniciar sesion")
 
 def seleccionar_cuit_representado(cuit_representado):
@@ -207,7 +207,7 @@ def exportar_excel(ubicacion_descarga, cuit_representado, cliente):
     try:       
         # Exportar XLSX
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//*[@id='DataTables_Table_0_wrapper']/div[1]/a[2]/span"))).click()
-        time.sleep(5)
+        time.sleep(3)
 
         # Guardarlo con nombre y carpeta especifica
         nombre_archivo = f"Reporte - {cliente}.xlsx"
@@ -234,7 +234,7 @@ def cerrar_sesion():
         driver.switch_to.window(window_handles[0])
         driver.find_element(By.ID, "iconoChicoContribuyenteAFIP").click()
         driver.find_element(By.XPATH, '//*[@id="contBtnContribuyente"]/div[6]/button/div/div[2]').click()
-        time.sleep(5)
+        time.sleep(3)
     except Exception as e:
         print(f"Error al cerrar sesión: {e}")
 
