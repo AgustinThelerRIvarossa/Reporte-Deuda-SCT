@@ -47,104 +47,25 @@ cuit_login_list = df['CUIT para ingresar'].tolist()
 cuit_represent_list = df['CUIT representado'].tolist()
 password_list = df['Contraseña'].tolist()
 download_list = df['Ubicacion descarga'].tolist()
+posterior_list = df['Posterior'].tolist()
+anterior_list = df['Anterior'].tolist()
 clientes_list = df['Cliente'].tolist()
 
-# MODIFICACIÓN 1: Remover variables anterior_list y posterior_list
-# Ya no se utilizarán las columnas 'Posterior' y 'Anterior'
+# Configuración de opciones de Chrome
+options = Options()
+options.add_argument("--start-maximized")
 
-# Variable global para el driver (se recreará por cada cliente)
-driver = None
+# Configurar preferencias de descarga
+prefs = {
+    "download.prompt_for_download": True,
+    "download.directory_upgrade": True,
+    "safebrowsing.enabled": True
+}
+options.add_experimental_option("prefs", prefs)
 
-def configurar_nuevo_navegador():
-    """Configura y retorna un nuevo navegador Chrome limpio."""
-    global driver
-    
-    # Configuración de opciones de Chrome
-    options = Options()
-    options.add_argument("--start-maximized")
-    
-    # Configurar preferencias de descarga
-    prefs = {
-        "download.prompt_for_download": True,
-        "download.directory_upgrade": True,
-        "safebrowsing.enabled": True
-    }
-    options.add_experimental_option("prefs", prefs)
-    
-    # Inicializar driver nuevo
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    
-    print("✅ Nuevo navegador Chrome configurado")
-    return driver
-
-def cerrar_sesion_y_navegador():
-    """Cierra sesión completa y navegador - NUEVA FUNCIÓN MEJORADA."""
-    global driver
-    
-    try:
-        print("\n--- INICIANDO CIERRE COMPLETO DE SESIÓN ---")
-        
-        # PASO 1: Verificar cuántas pestañas están abiertas
-        window_handles = driver.window_handles
-        num_pestanas = len(window_handles)
-        print(f"📊 Pestañas abiertas detectadas: {num_pestanas}")
-        
-        # PASO 2: Si hay más de 1 pestaña, cerrar las adicionales
-        if num_pestanas > 1:
-            print(f"🔄 Cerrando {num_pestanas - 1} pestañas adicionales...")
-            
-            # Ir a la última pestaña (SCT) y cerrarla
-            for i in range(num_pestanas - 1, 0, -1):  # Desde la última hacia la segunda
-                try:
-                    driver.switch_to.window(window_handles[i])
-                    print(f"🗂️ Cerrando pestaña {i + 1}: {driver.title[:50]}...")
-                    driver.close()
-                    time.sleep(2)
-                except Exception as e:
-                    print(f"⚠️ Error cerrando pestaña {i + 1}: {e}")
-            
-            # Volver a la pestaña principal (índice 0)
-            driver.switch_to.window(window_handles[0])
-            print("✅ Vuelto a la pestaña principal")
-            time.sleep(3)
-        
-        # PASO 3: Intentar cerrar sesión en AFIP desde la pestaña principal
-        try:
-            print("🔒 Intentando cerrar sesión en AFIP...")
-            
-            # Buscar el icono de contribuyente AFIP
-            icono_contribuyente = driver.find_element(By.ID, "iconoChicoContribuyenteAFIP")
-            icono_contribuyente.click()
-            time.sleep(3)
-            
-            # Buscar y hacer clic en el botón de salir
-            boton_salir = driver.find_element(By.XPATH, '//*[@id="contBtnContribuyente"]/div[6]/button/div/div[2]')
-            boton_salir.click()
-            time.sleep(5)
-            
-            print("✅ Sesión cerrada exitosamente en AFIP")
-            
-        except Exception as e:
-            print(f"⚠️ No se pudo cerrar sesión en AFIP (puede que no esté logueado): {e}")
-        
-        # PASO 4: Cerrar el navegador completamente
-        print("🌐 Cerrando navegador completamente...")
-        driver.quit()
-        driver = None
-        print("✅ Navegador cerrado exitosamente")
-        
-    except Exception as e:
-        print(f"🚨 Error durante cierre completo: {e}")
-        # Forzar cierre del navegador en caso de error
-        try:
-            if driver:
-                driver.quit()
-                driver = None
-        except:
-            pass
-    
-    print("--- CIERRE COMPLETO FINALIZADO ---\n")
+# Inicializar driver
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
 # Crear el archivo de resultados
 resultados = []
@@ -152,7 +73,7 @@ resultados = []
 def human_typing(element, text):
     for char in str(text):
         element.send_keys(char)
-        time.sleep(random.uniform(0.02, 0.13))
+        time.sleep(random.uniform(0.02, 0.15))
 
 def actualizar_excel(row_index, mensaje):
     """Actualiza la última columna del archivo Excel con un mensaje de error."""
@@ -660,11 +581,11 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
         driver.get('https://auth.afip.gob.ar/contribuyente_/login.xhtml')
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:username')))
         element.clear()
-        time.sleep(3)
+        time.sleep(5)
 
         human_typing(element, cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(3)
+        time.sleep(5)
 
         # Verificar si el CUIT es incorrecto
         try:
@@ -677,9 +598,9 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
 
         element_pass = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:password')))
         human_typing(element_pass, password)
-        time.sleep(6)
+        time.sleep(9)
         driver.find_element(By.ID, 'F1:btnIngresar').click()
-        time.sleep(3)
+        time.sleep(5)
 
         # Verificar si la contraseña es incorrecta
         try:
@@ -703,13 +624,13 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     boton_ver_todos = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Ver todos")))
     if boton_ver_todos:
         boton_ver_todos.click()
-        time.sleep(4)
+        time.sleep(5)
 
     # Buscar input del buscador y escribir
     buscador = driver.find_element(By.ID, 'buscadorInput')
     if buscador:
         human_typing(buscador, 'tas tr') 
-        time.sleep(4)
+        time.sleep(5)
 
     # Seleccionar la opción del menú
     opcion_menu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'rbt-menu-item-0')))
@@ -723,7 +644,7 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
         boton_continuar = driver.find_element(By.XPATH, '//button[text()="Continuar"]')
         if boton_continuar:
             boton_continuar.click()
-            time.sleep(3)
+            time.sleep(5)
 
     # Cambiar a la última pestaña abierta
     driver.switch_to.window(driver.window_handles[-1])
@@ -739,17 +660,17 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     username_input = driver.find_elements(By.ID, 'F1:username')
     if username_input:
         username_input[0].clear()
-        time.sleep(4)
+        time.sleep(5)
         human_typing(username_input[0], cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(4)
+        time.sleep(5)
 
         password_input = driver.find_elements(By.ID, 'F1:password')
         if password_input:
             human_typing(password_input[0], password)
-            time.sleep(6)
+            time.sleep(8)
             driver.find_element(By.ID, 'F1:btnIngresar').click()
-            time.sleep(4)
+            time.sleep(5)
             actualizar_excel(row_index, "Error volver a iniciar sesion")
 
 def seleccionar_cuit_representado(cuit_representado):
@@ -791,8 +712,8 @@ def configurar_select_100_mejorado(driver):
     
     try:
         # Esperar inicial
-        time.sleep(4)
-        print("✓ Esperando 4 segundos antes de configurar select...")
+        time.sleep(5)
+        print("✓ Esperando 5 segundos antes de configurar select...")
         
         # ESTRATEGIA 1: Buscar el select con múltiples selectores
         select_element = None
@@ -829,7 +750,7 @@ def configurar_select_100_mejorado(driver):
         
         if not select_element:
             print("✗ No se encontró ningún select, continuando sin cambio...")
-            time.sleep(3)
+            time.sleep(5)
             return False
         
         # ESTRATEGIA 2: Analizar el select encontrado
@@ -837,7 +758,7 @@ def configurar_select_100_mejorado(driver):
         
         # Hacer scroll al elemento
         driver.execute_script("arguments[0].scrollIntoView(true);", select_element)
-        time.sleep(3)
+        time.sleep(5)
         
         # Obtener información del select
         current_value = select_element.get_attribute('value')
@@ -899,7 +820,7 @@ def configurar_select_100_mejorado(driver):
                         break
             else:
                 print("✗ No se encontraron opciones válidas")
-                time.sleep(3)
+                time.sleep(5)
                 return False
         else:
             target_value = "100"
@@ -966,14 +887,14 @@ def configurar_select_100_mejorado(driver):
                 print(f"No se pudo contar filas visibles: {e}")
         
         # Esperar antes de continuar
-        print("✓ Esperando 5 segundos antes de extraer datos...")
-        time.sleep(5)
+        print("✓ Esperando 10 segundos antes de extraer datos...")
+        time.sleep(10)
         
         return exito_cambio
         
     except Exception as e:
         print(f"✗ Error general configurando select: {e}")
-        time.sleep(4)
+        time.sleep(5)
         return False
 
 def verificar_columnas_finales(df, cliente):
@@ -1002,6 +923,7 @@ def verificar_columnas_finales(df, cliente):
         return df
 
 def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
+    """Extrae datos directamente del HTML y genera PDF - versión mejorada."""
     try:
         print(f"=== INICIANDO EXTRACCIÓN HTML PARA CLIENTE: {cliente} ===")
         
@@ -1010,17 +932,18 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         print(f"Título de la página: {driver.title}")
         
         # Esperar a que la página se cargue completamente
-        time.sleep(6)
+        time.sleep(10)
+        
         # PASO 1: Verificar si hay iframe y cambiar a él
         print(f"\n--- VERIFICANDO Y CAMBIANDO AL IFRAME ---")
         
         iframe_encontrado = False
-
         try:
             # Buscar iframe específico del SCT
             iframe_selector = "iframe[src*='homeContribuyente']"
             iframe_element = WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, iframe_selector)))
+                EC.presence_of_element_located((By.CSS_SELECTOR, iframe_selector))
+            )
             
             print(f"✓ Iframe encontrado: {iframe_element.get_attribute('src')}")
             
@@ -1030,7 +953,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print("✓ Cambiado al iframe exitosamente")
             
             # Esperar a que el contenido del iframe se cargue COMPLETAMENTE
-            time.sleep(6)  # Aumentar tiempo de espera
+            time.sleep(15)  # Aumentar tiempo de espera
             
             # Esperar a que Vue.js termine de renderizar
             WebDriverWait(driver, 20).until(
@@ -1047,7 +970,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         
         elemento_deudas = None
         numero_deudas = 0
-
+        
         try:
             # PRIMERA BÚSQUEDA: Esperar explícitamente a que aparezcan las pestañas
             print("Esperando a que las pestañas se carguen...")
@@ -1180,7 +1103,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     
         except Exception as e:
             print(f"Error en búsqueda de elemento Deudas: {e}")
-
+        
         if not elemento_deudas:
             print("✗ No se encontró el elemento '$ Deudas'")
             
@@ -1198,7 +1121,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             return
         
         print(f"✓ Elemento '$ Deudas' encontrado con {numero_deudas} deudas")
-
+        
         # PASO 3: Decidir si hacer clic o generar PDF vacío
         datos_tabla = []
         
@@ -1208,25 +1131,26 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             try:
                 # Hacer scroll al elemento para asegurar que esté visible
                 driver.execute_script("arguments[0].scrollIntoView(true);", elemento_deudas)
-                time.sleep(4)
+                time.sleep(5)
                 
                 # Intentar clic normal primero
                 elemento_deudas.click()
                 print("✓ Clic normal en '$ Deudas' realizado")
-                time.sleep(6)  # Esperar más tiempo para que cargue la tabla
+                time.sleep(8)  # Esperar más tiempo para que cargue la tabla
 
                 # USAR LA FUNCIÓN MEJORADA PARA CONFIGURAR SELECT
                 exito_select = configurar_select_100_mejorado(driver)
             
                 if not exito_select:
-                    print("⚠ No se pudo configurar el select, continuando con los registros disponibles...")             
+                    print("⚠ No se pudo configurar el select, continuando con los registros disponibles...")
+                
             except Exception as e:
                 print(f"Error en clic normal: {e}")
                 try:
                     # Intentar clic con JavaScript
                     driver.execute_script("arguments[0].click();", elemento_deudas)
                     print("✓ Clic con JavaScript realizado")
-                    time.sleep(6)
+                    time.sleep(8)
                 except Exception as e2:
                     print(f"Error en clic JavaScript: {e2}")
                     
@@ -1273,8 +1197,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     if not select_element:
                         print("⚠ No se encontró el select, continuando sin cambiar...")
                         # Continuar sin el select, pero esperar antes de extraer datos
-                        time.sleep(3)
-                        print("✓ Esperando 3 segundos antes de extraer datos...")
+                        time.sleep(5)
+                        print("✓ Esperando 5 segundos antes de extraer datos...")
                     else:
                         # Procesar el select encontrado
                         pass
@@ -1320,8 +1244,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                     print("⚠ No se pudo cambiar el select, continuando...")
                     
                     # Esperar a que la tabla se actualice después del cambio
-                    time.sleep(7)
-                    print("✓ Esperando 7 segundos para que la tabla se actualice...")
+                    time.sleep(12)
+                    print("✓ Esperando 12 segundos para que la tabla se actualice...")
                     
                     # Verificar el cambio
                     try:
@@ -1341,27 +1265,27 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     except Exception as e:
                         print(f"Error verificando el cambio: {e}")
                 
-                # Esperar 3 segundos antes de empezar a extraer datos
-                time.sleep(3)
-                print("✓ Esperando 3 segundos antes de extraer datos de la tabla...")
+                # Esperar 5 segundos antes de empezar a extraer datos
+                time.sleep(5)
+                print("✓ Esperando 5 segundos antes de extraer datos de la tabla...")
 
             except Exception as e:
                 print(f"Error configurando select: {e}")
                 # En caso de error, al menos esperar antes de continuar
                 time.sleep(5)
                 print("✓ Esperando 5 segundos antes de continuar (por error en select)...")
-            
+
             # PASO 4: Extraer datos de la tabla (dentro del iframe) - VERSIÓN OPTIMIZADA
             print(f"\n--- EXTRAYENDO DATOS CON FILTROS COMPLETOS ---")
 
             try:
                 # Esperar a que la tabla se cargue dentro del iframe
                 WebDriverWait(driver, 20).until(
-                    EC.presence_of_element_located((By.XPATH, "//table[@role='table']")))
+                    EC.presence_of_element_located((By.XPATH, "//table[@role='table']"))
+                )
                 
                 # Buscar la tabla específica con 12 columnas
                 tabla = None
-
                 try:
                     tabla = driver.find_element(By.XPATH, "//table[@role='table'][@aria-colcount='12']")
                     aria_rowcount = tabla.get_attribute('aria-rowcount')
@@ -1396,7 +1320,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                 }
              
                 print(f"Mapeo completo definido: {len(mapeo_columnas_completo)} columnas")
-
+                
                 # FILTROS DE IMPUESTOS (igual que en procesar_excel)
                 impuestos_incluir = [
                     'ganancias sociedades',
@@ -1418,7 +1342,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                 fecha_inicio = datetime(year=año_actual - 7, month=1, day=1).date()
                 
                 print(f"Filtro de fechas: desde {fecha_inicio} hasta {fecha_actual}")
-
+                
                 # EXTRAER FILAS DE DATOS CON FILTROS
                 try:
                     filas_datos = tabla.find_elements(By.XPATH, ".//tbody//tr[@role='row']")
@@ -1426,7 +1350,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     
                     datos_extraidos = 0
                     datos_filtrados = 0
-
+                    
                     for i, fila in enumerate(filas_datos):
                         try:
                             print(f"\n--- Procesando fila {i+1} ---")
@@ -1434,11 +1358,12 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                             # Extraer datos de TODAS las columnas primero
                             datos_fila_completa = {}
                             fila_valida = True
+                            
                             for aria_colindex, nombre_columna in mapeo_columnas_completo.items():
                                 try:
                                     celda = fila.find_element(By.XPATH, f".//td[@aria-colindex='{aria_colindex}'][@role='cell']")
                                     texto_celda = celda.text.strip()
-
+                                    
                                     # Limpiar valores monetarios
                                     if nombre_columna in ['Saldo', 'Int. Resarcitorios', 'Int. Punitorio']:
                                         if not texto_celda or texto_celda in ['', '-', 'N/A']:
@@ -1446,7 +1371,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                         else:
                                             # Limpiar formato monetario: $ 178.468,79 → 178468.79
                                             texto_limpio = texto_celda.replace('$', '').replace(' ', '').strip()
-
+                                            
                                             # Si tiene formato argentino (puntos como separadores de miles, coma como decimal)
                                             if ',' in texto_limpio and '.' in texto_limpio:
                                                 # Formato: 178.468,79 → 178468.79
@@ -1470,15 +1395,16 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                                     texto_celda = texto_limpio.replace('.', '')
                                             else:
                                                 texto_celda = texto_limpio
+                                            
                                             # Validar que sea numérico
                                             try:
                                                 float(texto_celda)
                                             except ValueError:
                                                 texto_celda = '0'
-
+                                    
                                     datos_fila_completa[nombre_columna] = texto_celda
                                     print(f"  {nombre_columna} (col-{aria_colindex}): '{texto_celda}'")
-
+                                                                       
                                 except Exception as e:
                                     # Manejo de errores por columna
                                     if nombre_columna in ['Saldo', 'Int. Resarcitorios', 'Int. Punitorio']:
@@ -1489,6 +1415,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                         print(f"  {nombre_columna} (col-{aria_colindex}): '' (error: {str(e)[:50]}...)")
                                         if nombre_columna in ['Impuesto', 'Vencimiento']:  # Campos críticos
                                             fila_valida = False
+                            
                             # APLICAR FILTROS
                             if fila_valida:
                                 
@@ -1543,11 +1470,12 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                             else:
                                 print(f"  ✗ Fila {i+1} descartada: fila inválida")
                             
-                            datos_filtrados += 1    
+                            datos_filtrados += 1
+                            
                         except Exception as e:
                             print(f"  ✗ Error procesando fila {i+1}: {e}")
                             continue
-
+                    
                     print(f"\n✓ RESUMEN DE EXTRACCIÓN Y FILTRADO:")
                     print(f"  - Filas procesadas: {len(filas_datos)}")
                     print(f"  - Filas filtradas: {datos_filtrados}")
@@ -1590,13 +1518,13 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                             archivo_debug = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"debug_extraccion_filtrada_{cliente}.html")
                             with open(archivo_debug, 'w', encoding='utf-8') as f:
                                 f.write(tabla_html)
-                            print(f"    HTML guardado para análisis: {archivo_debug}") 
-
+                            print(f"    HTML guardado para análisis: {archivo_debug}")
+                    
                 except Exception as e:
                     print(f"Error extrayendo filas con filtros: {e}")
                     import traceback
                     traceback.print_exc()
-
+                
             except Exception as e:
                 print(f"Error general en extracción filtrada: {e}")
                 import traceback
@@ -1605,12 +1533,14 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                 if iframe_encontrado:
                     driver.switch_to.default_content()
                 return
+
         
         # PASO 5: Volver al contenido principal antes de generar PDF
         if iframe_encontrado:
             print("\n--- VOLVIENDO AL CONTENIDO PRINCIPAL ---")
             driver.switch_to.default_content()
             print("✓ Vuelto al contenido principal")
+        
         # PASO 6: Generar PDF
         print(f"\n--- GENERANDO PDF ---")
         
@@ -1640,7 +1570,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         generar_pdf_desde_dataframe(df_filtrado, cliente, ruta_pdf)
         
         print(f"✓ PDF generado: {ruta_pdf}")
-
+        
     except Exception as e:
         print(f"✗ ERROR GENERAL: {e}")
         import traceback
@@ -1652,68 +1582,51 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         except:
             pass
 
-# MODIFICACIÓN 2: Nueva función unificada para procesar cada cliente
-def procesar_cliente_completo(cuit_ingresar, cuit_representado, password, cliente, indice):
-    """
-    Función unificada que procesa completamente un cliente con sesión limpia.
-    SIEMPRE inicia con navegador nuevo y cierra todo al finalizar.
-    """
-    print(f"\n{'='*80}")
-    print(f"🚀 INICIANDO PROCESAMIENTO DE CLIENTE: {cliente}")
-    print(f"📋 CUIT Login: {cuit_ingresar} | CUIT Representado: {cuit_representado}")
-    print(f"{'='*80}")
-    
+def cerrar_sesion():
+    """Cierra la sesión actual."""
     try:
-        # PASO 1: Configurar navegador nuevo y limpio
-        print("🌐 PASO 1: Configurando navegador nuevo...")
-        configurar_nuevo_navegador()
-        
-        # PASO 2: Iniciar sesión
-        print("🔐 PASO 2: Iniciando sesión en AFIP...")
-        control_sesion = iniciar_sesion(cuit_ingresar, password, indice)
-        
-        if not control_sesion:
-            print(f"❌ Error en autenticación para {cliente}")
-            return False
-        
-        # PASO 3: Ingresar al módulo SCT
-        print("🏢 PASO 3: Ingresando al módulo de Sistema de Cuentas Tributarias...")
-        ingresar_modulo(cuit_ingresar, password, indice)
-        
-        # PASO 4: Cerrar popup inicial
-        try:
-            xpath_popup = "/html/body/div[2]/div[2]/div/div/a"
-            element_popup = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, xpath_popup)))
-            element_popup.click()
-            print("✅ Popup inicial cerrado exitosamente")
-        except Exception as e:
-            print(f"⚠️ Error al intentar cerrar popup inicial: {e}")
-        
-        # PASO 5: Seleccionar CUIT representado
-        print("🎯 PASO 5: Seleccionando CUIT representado...")
-        if not seleccionar_cuit_representado(cuit_representado):
-            print(f"❌ Error seleccionando CUIT representado para {cliente}")
-            return False
-        
-        # PASO 6: Extraer datos y generar PDF
-        print("📊 PASO 6: Extrayendo datos y generando PDF...")
-        exportar_desde_html(output_folder_pdf, cuit_representado, cliente)
-        
-        print(f"✅ CLIENTE {cliente} PROCESADO EXITOSAMENTE")
-        return True
-        
+        driver.close()
+        window_handles = driver.window_handles
+        driver.switch_to.window(window_handles[0])
+        driver.find_element(By.ID, "iconoChicoContribuyenteAFIP").click()
+        driver.find_element(By.XPATH, '//*[@id="contBtnContribuyente"]/div[6]/button/div/div[2]').click()
+        time.sleep(5)
     except Exception as e:
-        print(f"❌ ERROR GENERAL procesando cliente {cliente}: {e}")
-        import traceback
-        traceback.print_exc()
-        actualizar_excel(indice, f"Error general: {str(e)[:50]}...")
-        return False
-    
-    finally:
-        # PASO 7: SIEMPRE cerrar sesión y navegador al final
-        print("🔒 PASO 7: Cerrando sesión y navegador...")
-        cerrar_sesion_y_navegador()
-        print(f"🏁 PROCESAMIENTO DE {cliente} FINALIZADO\n")
+        print(f"Error al cerrar sesión: {e}")
+
+# CORRECCIÓN 1: Modificar las funciones para usar output_folder_pdf
+def extraer_datos_nuevo(cuit_ingresar, cuit_representado, password, ubicacion_descarga, posterior, cliente, indice):
+    """Extrae datos para un nuevo usuario."""
+    try:
+        control_sesion = iniciar_sesion(cuit_ingresar, password, indice)
+        if control_sesion:
+            ingresar_modulo(cuit_ingresar, password, indice)
+            # Esperar que el popup esté visible y hacer clic en el botón de cerrar por XPATH
+            try:
+                xpath_popup = "/html/body/div[2]/div[2]/div/div/a"
+                element_popup = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, xpath_popup)))
+                element_popup.click()
+                print("Popup cerrado exitosamente.")
+            except Exception as e:
+                print(f"Error al intentar cerrar el popup: {e}")
+            if seleccionar_cuit_representado(cuit_representado):
+                # CAMBIO: Usar output_folder_pdf en lugar de ubicacion_descarga
+                exportar_desde_html(output_folder_pdf, cuit_representado, cliente)
+                if posterior == 0:
+                    cerrar_sesion()
+    except Exception as e:
+        print(f"Error al extraer datos para el nuevo usuario: {e}")
+
+def extraer_datos(cuit_representado, ubicacion_descarga, posterior, cliente):
+    """Extrae datos para un usuario existente."""
+    try:
+        if seleccionar_cuit_representado(cuit_representado):
+            # CAMBIO: Usar output_folder_pdf en lugar de ubicacion_descarga
+            exportar_desde_html(output_folder_pdf, cuit_representado, cliente)
+            if posterior == 0:
+                cerrar_sesion()
+    except Exception as e:
+        print(f"Error al extraer datos: {e}")
 
 # Función para convertir Excel a CSV utilizando xlwings
 def excel_a_csv(input_folder, output_folder):
@@ -1775,31 +1688,14 @@ print("=" * 60)
 verificar_funciones_disponibles()
 print("=" * 60)
 
-# MODIFICACIÓN 3: Bucle principal simplificado - TODOS los clientes usan sesión nueva
-print("🚀 INICIANDO PROCESAMIENTO DE CLIENTES")
-print("📋 MODO: Sesión limpia por cliente (sin reutilización)")
-
+# Iterar sobre cada cliente
 indice = 0
-for cuit_ingresar, cuit_representado, password, cliente in zip(cuit_login_list, cuit_represent_list, password_list, clientes_list):
-    print(f"\n🔄 PROCESANDO CLIENTE {indice + 1}/{len(clientes_list)}")
-    
-    # TODOS los clientes ahora usan la función unificada
-    # No importa si son "nuevos" o "existentes" - siempre sesión limpia
-    exito = procesar_cliente_completo(cuit_ingresar, cuit_representado, password, cliente, indice)
-    
-    if exito:
-        print(f"✅ Cliente {cliente} completado exitosamente")
+for cuit_ingresar, cuit_representado, password, download, posterior, anterior, cliente in zip(cuit_login_list, cuit_represent_list, password_list, download_list, posterior_list, anterior_list, clientes_list):
+    if anterior == 0:
+        extraer_datos_nuevo(cuit_ingresar, cuit_representado, password, download, posterior, cliente, indice)
     else:
-        print(f"❌ Cliente {cliente} falló - ver logs para detalles")
-    
-    indice += 1
-
-print("\n" + "="*60)
-print("✅ PROCESAMIENTO DE TODOS LOS CLIENTES COMPLETADO")
-print("="*60)
-
-# MODIFICACIÓN 4: Mantener procesamiento de archivos Excel locales (sin cambios)
-print("\n📂 PROCESANDO ARCHIVOS EXCEL LOCALES...")
+        extraer_datos(cuit_representado, download, posterior, cliente)
+    indice = indice + 1
 
 # Recorrer todos los archivos Excel en la carpeta (esto se mantiene para procesar archivos Excel existentes)
 for excel_file in glob.glob(os.path.join(input_folder_excel, "*.xlsx")):
@@ -1820,5 +1716,5 @@ for excel_file in glob.glob(os.path.join(input_folder_excel, "*.xlsx")):
         print(f"Error al procesar {excel_file}: {e}")
 
 print("=" * 60)
-print("🎉 PROCESO COMPLETADO - ARCHIVOS EXCEL LOCALES")
+print("PROCESO COMPLETADO")
 print("=" * 60)
