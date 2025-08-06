@@ -19,9 +19,6 @@ import glob
 import random
 import xlwings as xw
 import pdfkit
-import os
-import pandas as pd
-import glob
 import inspect
 import sys
 
@@ -34,7 +31,6 @@ output_folder_csv = os.path.join(base_dir, "data", "input", "DeudasCSV")
 output_file_csv = os.path.join(base_dir, "data", "Resumen_deudas.csv")
 output_file_xlsx = os.path.join(base_dir, "data", "Resumen_deudas.xlsx")
 
-# CORRECCIÓN 4: Mover estas variables ANTES del bucle principal
 output_folder_pdf = os.path.join(base_dir, "data", "Reportes")
 imagen = os.path.join(base_dir, "data", "imagen.png")
 
@@ -49,14 +45,9 @@ password_list = df['Contraseña'].tolist()
 download_list = df['Ubicacion descarga'].tolist()
 clientes_list = df['Cliente'].tolist()
 
-# MODIFICACIÓN 1: Remover variables anterior_list y posterior_list
-# Ya no se utilizarán las columnas 'Posterior' y 'Anterior'
-
-# Variable global para el driver (se recreará por cada cliente)
 driver = None
 
 def configurar_nuevo_navegador():
-    """Configura y retorna un nuevo navegador Chrome limpio."""
     global driver
     
     # Configuración de opciones de Chrome
@@ -79,7 +70,6 @@ def configurar_nuevo_navegador():
     return driver
 
 def cerrar_sesion_y_navegador():
-    """Cierra sesión completa y navegador - NUEVA FUNCIÓN MEJORADA."""
     global driver
     
     try:
@@ -107,7 +97,7 @@ def cerrar_sesion_y_navegador():
             # Volver a la pestaña principal (índice 0)
             driver.switch_to.window(window_handles[0])
             print("✅ Vuelto a la pestaña principal")
-            time.sleep(3)
+            time.sleep(2)
         
         # PASO 3: Intentar cerrar sesión en AFIP desde la pestaña principal
         try:
@@ -116,12 +106,12 @@ def cerrar_sesion_y_navegador():
             # Buscar el icono de contribuyente AFIP
             icono_contribuyente = driver.find_element(By.ID, "iconoChicoContribuyenteAFIP")
             icono_contribuyente.click()
-            time.sleep(3)
+            time.sleep(2)
             
             # Buscar y hacer clic en el botón de salir
             boton_salir = driver.find_element(By.XPATH, '//*[@id="contBtnContribuyente"]/div[6]/button/div/div[2]')
             boton_salir.click()
-            time.sleep(5)
+            time.sleep(2)
             
             print("✅ Sesión cerrada exitosamente en AFIP")
             
@@ -152,14 +142,13 @@ resultados = []
 def human_typing(element, text):
     for char in str(text):
         element.send_keys(char)
-        time.sleep(random.uniform(0.02, 0.13))
+        time.sleep(random.uniform(0.01, 0.05))
 
 def actualizar_excel(row_index, mensaje):
     """Actualiza la última columna del archivo Excel con un mensaje de error."""
     df.at[row_index, 'Error'] = mensaje
     df.to_excel(input_excel_clientes, index=False)
 
-# ========== VERIFICACIÓN DE FUNCIONES ==========
 def verificar_funciones_disponibles():
     """Verifica que todas las funciones necesarias estén disponibles."""
     funciones_necesarias = ['procesar_excel', 'aplicar_filtros_deudas', 'generar_pdf_desde_dataframe']
@@ -177,8 +166,6 @@ def verificar_funciones_disponibles():
     all_functions = [name for name, obj in inspect.getmembers(current_module) if inspect.isfunction(obj)]
     print(f"Total funciones disponibles: {len(all_functions)}")
 
-# ========== FUNCIONES FALTANTES - AGREGADAS ==========
-
 def aplicar_filtros_deudas(df, cliente):
     """Aplica los mismos filtros que se aplicaban al Excel."""
     try:
@@ -193,8 +180,24 @@ def aplicar_filtros_deudas(df, cliente):
             'sicore-impto.a las ganancias',
             'empleador-aportes seg. social',
             'contribuciones seg. social',
-            'ret art 79 ley gcias in a,byc',
-            'renatea'
+            'ret art 79 ley gcias inc a,byc',
+            'renatea',
+            'ganancias personas fisicas',
+            'ganancia minima presunta',
+            'seguro de vida colectivo',
+            'regimenes de informacion',
+            'imp s/deb y cred en cta cte',
+            'presentac. dj ret. y/o percep',
+            'contrib.vales aliment.l.24700',
+            'aportes obra social',
+            'aseg.riesgo de trabajo l 24557',
+            'contribuciones obra social',
+            'contribuciones renatea',
+            'derecho exportacion servicios',
+            'impto.s/bienes personales',
+            'multas infracciones formales',
+            'retenciones contrib.seg.social',
+            'sicore - retenciones y percepc'
         ]
         
         # Filtrar por impuestos (si existe la columna)
@@ -292,7 +295,7 @@ def generar_pdf_desde_dataframe(df, cliente, ruta_pdf):
         print(f"\n--- GENERANDO PDF PARA {cliente} ---")
         
         # Crear Excel temporal para usar la función existente
-        temp_excel = ruta_pdf.replace('.pdf', '_temp.xlsx')
+        temp_excel = ruta_pdf.replace('.pdf', '.xlsx').replace('Reporte - ', 'temp_excel_')
         
         if len(df) > 0:
             df.to_excel(temp_excel, index=False)
@@ -328,18 +331,54 @@ def generar_pdf_desde_dataframe(df, cliente, ruta_pdf):
         import traceback
         traceback.print_exc()
 
-# ========== DEFINIR PROCESAR_EXCEL ANTES DE USARLA ==========
+def formatear_numero_argentino(valor):
+    # Convierte un número a formato argentino: 1.234.567,89
+    try:
+        # Convertir a float
+        num = float(valor) if valor != '' and valor is not None else 0.0
+        
+        # Formatear con 2 decimales
+        if num == 0:
+            return "0,00"
+        
+        # Usar formato argentino: separador de miles punto, decimal coma
+        if num < 0:
+            return f"-{abs(num):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        else:
+            return f"{num:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            
+    except (ValueError, TypeError):
+        return "0,00"
+
+def convertir_argentino_a_float(valor_str):
+    # Convierte formato argentino a float: 1.234,56 → 1234.56
+    try:
+        if not valor_str or valor_str in ['', '-', 'N/A', '0,00']:
+            return 0.0
+        
+        # Limpiar y convertir formato argentino a float
+        valor_limpio = str(valor_str).replace('.', '').replace(',', '.')
+        return float(valor_limpio)
+    except (ValueError, TypeError):
+        return 0.0
 
 def procesar_excel(excel_file, output_pdf, imagen):
     try:
         # CORRECCIÓN: Definir nombre_archivo al inicio de la función
         nombre_archivo = os.path.basename(excel_file)
-        
-        if " - " in nombre_archivo:
+
+        # Limpiar el nombre temporal para extraer el cliente correctamente
+        if nombre_archivo.startswith("temp_excel_"):
+            # Archivo temporal: temp_excel_3470 PRODUCCIONES SA.xlsx
+            cliente = nombre_archivo.replace("temp_excel_", "").replace(".xlsx", "")
+        elif " - " in nombre_archivo:
             cliente = nombre_archivo.split(" - ")[1].replace(".xlsx", "").replace(" - vacio", "")
         else:
             # Fallback si el formato es diferente
             cliente = nombre_archivo.replace(".xlsx", "")
+
+        # CORRECCIÓN: Limpiar cualquier sufijo "- vacio" del nombre del cliente para el título
+        cliente_titulo = cliente.replace(" - vacio", "").strip()
         
         print(f"Procesando cliente: {cliente}")
 
@@ -348,7 +387,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
 
         # CAMBIO: Solo aplicar filtros si el archivo NO viene de exportar_desde_html
         # Los archivos de exportar_desde_html ya vienen filtrados
-        es_archivo_de_html = nombre_archivo.startswith("Reporte - ") and "_temp.xlsx" in excel_file
+        es_archivo_de_html = nombre_archivo.startswith("temp_excel_") or "temp_excel_" in excel_file
         
         if not es_archivo_de_html:
             # Aplicar filtros solo a archivos Excel originales (del bucle final)
@@ -362,8 +401,24 @@ def procesar_excel(excel_file, output_pdf, imagen):
                 'sicore-impto.a las ganancias',
                 'empleador-aportes seg. social',
                 'contribuciones seg. social',
-                'ret art 79 ley gcias in a,byc',
-                'renatea'
+                'ret art 79 ley gcias inc a,byc',
+                'renatea',
+                'ganancias personas fisicas',
+                'ganancia minima presunta',
+                'seguro de vida colectivo',
+                'regimenes de informacion',
+                'imp s/deb y cred en cta cte',
+                'presentac. dj ret. y/o percep',
+                'contrib.vales aliment.l.24700',
+                'aportes obra social',
+                'aseg.riesgo de trabajo l 24557',
+                'contribuciones obra social',
+                'contribuciones renatea',
+                'derecho exportacion servicios',
+                'impto.s/bienes personales',
+                'multas infracciones formales',
+                'retenciones contrib.seg.social',
+                'sicore - retenciones y percepc'
             ]
 
             # Filtrar por múltiples tipos de "Impuesto"
@@ -449,6 +504,16 @@ def procesar_excel(excel_file, output_pdf, imagen):
         # Guardar el DataFrame filtrado en el archivo Excel
         df_filtrado.to_excel(excel_file, index=False)
 
+        # FORMATEAR VALORES MONETARIOS ANTES DE GUARDAR EN EXCEL
+        print("Formateando valores monetarios individuales...")
+
+        # Formatear columnas monetarias en el DataFrame
+        columnas_monetarias = ['Saldo', 'Int. Resarcitorios']
+        for col in columnas_monetarias:
+            if col in df_filtrado.columns:
+                # Mantener valores numéricos para cálculos internos, formatear solo para visualización
+                print(f"Columna {col} preparada para formateo")
+
         # Cargar el archivo para aplicar formato con openpyxl
         wb = load_workbook(excel_file)
         ws = wb.active
@@ -484,7 +549,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
 
         # Establecer el texto en la celda combinada
         celda_texto = ws[f'A{fila_texto}']
-        celda_texto.value = f"Reporte de deudas del SCT - {cliente} "
+        celda_texto.value = f"Reporte de deudas del SCT - {cliente_titulo}"
 
         # Aplicar formato centrado y en negrita
         celda_texto.alignment = Alignment(horizontal='center', vertical='center')
@@ -566,44 +631,62 @@ def procesar_excel(excel_file, output_pdf, imagen):
         
         if saldo_col:
             suma_saldo = 0
+            print(f"Formateando columna Saldo (columna {saldo_col})")
             
             for fila in range(10, ultima_fila_datos + 1):
                 celda_saldo = ws.cell(row=fila, column=saldo_col)
-                if celda_saldo.value:
+                if celda_saldo.value is not None:
                     try:
-                        # Intentar convertir directamente a float
-                        valor = float(celda_saldo.value) if isinstance(celda_saldo.value, (int, float)) else 0
-                        suma_saldo += valor
+                        # Convertir a float para suma
+                        valor_numerico = float(celda_saldo.value) if isinstance(celda_saldo.value, (int, float)) else convertir_argentino_a_float(celda_saldo.value)
+                        suma_saldo += valor_numerico
+                        
+                        # Formatear celda individual con formato argentino
+                        celda_saldo.value = valor_numerico
+                        celda_saldo.number_format = '#,##0.00'  # Excel aplicará separadores según configuración regional
+                        
                     except (ValueError, TypeError):
                         print(f"Valor no numérico en Saldo fila {fila}: {celda_saldo.value}")
+                        celda_saldo.value = 0
+                        celda_saldo.number_format = '#,##0.00'
             
             print(f"Total Saldo: {suma_saldo}")
             
-            # Insertar la suma tal como está
+            # Insertar la suma con formato
             celda_suma_saldo = ws.cell(row=fila_total, column=saldo_col)
             celda_suma_saldo.value = suma_saldo
+            celda_suma_saldo.number_format = '#,##0.00'
             celda_suma_saldo.font = Font(bold=True)
             celda_suma_saldo.alignment = Alignment(horizontal='right', vertical='center')
 
-        # Calcular y agregar sumatoria de Int. resarcitorios
+        # Calcular y agregar sumatoria de Int. resarcitorios con formato
         if int_resarcitorios_col:
             suma_int_resarcitorios = 0
+            print(f"Formateando columna Int. Resarcitorios (columna {int_resarcitorios_col})")
             
             for fila in range(10, ultima_fila_datos + 1):
                 celda_int = ws.cell(row=fila, column=int_resarcitorios_col)
-                if celda_int.value:
+                if celda_int.value is not None:
                     try:
-                        # Intentar convertir directamente a float
-                        valor = float(celda_int.value) if isinstance(celda_int.value, (int, float)) else 0
-                        suma_int_resarcitorios += valor
+                        # Convertir a float para suma
+                        valor_numerico = float(celda_int.value) if isinstance(celda_int.value, (int, float)) else convertir_argentino_a_float(celda_int.value)
+                        suma_int_resarcitorios += valor_numerico
+                        
+                        # Formatear celda individual
+                        celda_int.value = valor_numerico
+                        celda_int.number_format = '#,##0.00'
+                        
                     except (ValueError, TypeError):
                         print(f"Valor no numérico en Int. Resarcitorios fila {fila}: {celda_int.value}")
+                        celda_int.value = 0
+                        celda_int.number_format = '#,##0.00'
             
             print(f"Total Int. Resarcitorios: {suma_int_resarcitorios}")
             
-            # Insertar la suma tal como está
+            # Insertar la suma con formato
             celda_suma_int = ws.cell(row=fila_total, column=int_resarcitorios_col)
             celda_suma_int.value = suma_int_resarcitorios
+            celda_suma_int.number_format = '#,##0.00'
             celda_suma_int.font = Font(bold=True)
             celda_suma_int.alignment = Alignment(horizontal='right', vertical='center')
 
@@ -611,7 +694,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
         wb.save(excel_file)
         ajustar_diseno_excel(ws)
         wb.save(excel_file)
-        # Convertir el archivo Excel a PDF con pywin32
+        # Convertir el archivo Excel a PDF con pywin32f
         excel = win32.Dispatch("Excel.Application")
         excel.Visible = False
         wb = excel.Workbooks.Open(excel_file)
@@ -652,19 +735,17 @@ def procesar_excel(excel_file, output_pdf, imagen):
         if 'excel' in locals():
             excel.Quit()
 
-# ========== FIN FUNCIONES AGREGADAS ==========
-
 def iniciar_sesion(cuit_ingresar, password, row_index):
     """Inicia sesión en el sitio web con el CUIT y contraseña proporcionados."""
     try:
         driver.get('https://auth.afip.gob.ar/contribuyente_/login.xhtml')
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:username')))
         element.clear()
-        time.sleep(3)
+        time.sleep(2)
 
         human_typing(element, cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(3)
+        time.sleep(2)
 
         # Verificar si el CUIT es incorrecto
         try:
@@ -677,9 +758,9 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
 
         element_pass = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:password')))
         human_typing(element_pass, password)
-        time.sleep(6)
-        driver.find_element(By.ID, 'F1:btnIngresar').click()
         time.sleep(3)
+        driver.find_element(By.ID, 'F1:btnIngresar').click()
+        time.sleep(2)
 
         # Verificar si la contraseña es incorrecta
         try:
@@ -703,19 +784,19 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     boton_ver_todos = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Ver todos")))
     if boton_ver_todos:
         boton_ver_todos.click()
-        time.sleep(4)
+        time.sleep(2)
 
     # Buscar input del buscador y escribir
     buscador = driver.find_element(By.ID, 'buscadorInput')
     if buscador:
         human_typing(buscador, 'tas tr') 
-        time.sleep(4)
+        time.sleep(2)
 
     # Seleccionar la opción del menú
     opcion_menu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'rbt-menu-item-0')))
     if opcion_menu:
         opcion_menu.click()
-        time.sleep(4)
+        time.sleep(2)
 
     # Manejar modal si aparece
     modales = driver.find_elements(By.CLASS_NAME, 'modal-content')
@@ -723,7 +804,7 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
         boton_continuar = driver.find_element(By.XPATH, '//button[text()="Continuar"]')
         if boton_continuar:
             boton_continuar.click()
-            time.sleep(3)
+            time.sleep(2)
 
     # Cambiar a la última pestaña abierta
     driver.switch_to.window(driver.window_handles[-1])
@@ -733,23 +814,23 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     if error_message_elements and error_message_elements[0].text == "Ha ocurrido un error al autenticar, intente nuevamente.":
         actualizar_excel(row_index, "Error autenticacion")
         driver.refresh()
-        time.sleep(5)
+        time.sleep(2)
 
     # Verificar si es necesario iniciar sesión nuevamente
     username_input = driver.find_elements(By.ID, 'F1:username')
     if username_input:
         username_input[0].clear()
-        time.sleep(4)
+        time.sleep(2)
         human_typing(username_input[0], cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(4)
+        time.sleep(2)
 
         password_input = driver.find_elements(By.ID, 'F1:password')
         if password_input:
             human_typing(password_input[0], password)
-            time.sleep(6)
+            time.sleep(2)
             driver.find_element(By.ID, 'F1:btnIngresar').click()
-            time.sleep(4)
+            time.sleep(2)
             actualizar_excel(row_index, "Error volver a iniciar sesion")
 
 def seleccionar_cuit_representado(cuit_representado):
@@ -783,16 +864,12 @@ def seleccionar_cuit_representado(cuit_representado):
     return True
 
 def configurar_select_100_mejorado(driver):
-    """
-    Versión mejorada para configurar el select a 100 registros.
-    Incluye múltiples estrategias y validación visual.
-    """
     print(f"\n--- CONFIGURANDO SELECT A 100 REGISTROS (VERSIÓN MEJORADA) ---")
     
     try:
         # Esperar inicial
-        time.sleep(4)
-        print("✓ Esperando 4 segundos antes de configurar select...")
+        time.sleep(2)
+        print("✓ Esperando 2 segundos antes de configurar select...")
         
         # ESTRATEGIA 1: Buscar el select con múltiples selectores
         select_element = None
@@ -829,7 +906,7 @@ def configurar_select_100_mejorado(driver):
         
         if not select_element:
             print("✗ No se encontró ningún select, continuando sin cambio...")
-            time.sleep(3)
+            time.sleep(2)
             return False
         
         # ESTRATEGIA 2: Analizar el select encontrado
@@ -837,7 +914,7 @@ def configurar_select_100_mejorado(driver):
         
         # Hacer scroll al elemento
         driver.execute_script("arguments[0].scrollIntoView(true);", select_element)
-        time.sleep(3)
+        time.sleep(2)
         
         # Obtener información del select
         current_value = select_element.get_attribute('value')
@@ -867,7 +944,7 @@ def configurar_select_100_mejorado(driver):
         # Verificar si ya está en 100
         if current_value == "100":
             print("✓ Select ya está configurado en 100")
-            time.sleep(3)
+            time.sleep(2)
             return True
         
         # ESTRATEGIA 4: Buscar la opción 100
@@ -899,7 +976,7 @@ def configurar_select_100_mejorado(driver):
                         break
             else:
                 print("✗ No se encontraron opciones válidas")
-                time.sleep(3)
+                time.sleep(2)
                 return False
         else:
             target_value = "100"
@@ -931,7 +1008,7 @@ def configurar_select_100_mejorado(driver):
         # ESTRATEGIA 6: Verificación visual y de DOM
         if exito_cambio:
             print(f"\n--- VERIFICANDO CAMBIO ---")
-            time.sleep(5)
+            time.sleep(2)
             
             # Verificar valor del select
             valor_final = select_element.get_attribute('value')
@@ -966,20 +1043,18 @@ def configurar_select_100_mejorado(driver):
                 print(f"No se pudo contar filas visibles: {e}")
         
         # Esperar antes de continuar
-        print("✓ Esperando 5 segundos antes de extraer datos...")
-        time.sleep(5)
+        print("✓ Esperando 2 segundos antes de extraer datos...")
+        time.sleep(2)
         
         return exito_cambio
         
     except Exception as e:
         print(f"✗ Error general configurando select: {e}")
-        time.sleep(4)
+        time.sleep(2)
         return False
 
 def verificar_columnas_finales(df, cliente):
-    """
-    Verifica que solo estén las columnas correctas antes de generar PDF.
-    """
+    # Verifica que solo estén las columnas correctas antes de generar PDF.
     print(f"\n--- VERIFICANDO COLUMNAS FINALES PARA {cliente} ---")
     
     columnas_esperadas = ['Impuesto', 'Período', 'Ant/Cuota', 'Vencimiento', 'Saldo', 'Int. Resarcitorios']
@@ -1010,7 +1085,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         print(f"Título de la página: {driver.title}")
         
         # Esperar a que la página se cargue completamente
-        time.sleep(6)
+        time.sleep(2)
         # PASO 1: Verificar si hay iframe y cambiar a él
         print(f"\n--- VERIFICANDO Y CAMBIANDO AL IFRAME ---")
         
@@ -1030,7 +1105,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print("✓ Cambiado al iframe exitosamente")
             
             # Esperar a que el contenido del iframe se cargue COMPLETAMENTE
-            time.sleep(6)  # Aumentar tiempo de espera
+            time.sleep(3)  # Aumentar tiempo de espera
             
             # Esperar a que Vue.js termine de renderizar
             WebDriverWait(driver, 20).until(
@@ -1208,12 +1283,12 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             try:
                 # Hacer scroll al elemento para asegurar que esté visible
                 driver.execute_script("arguments[0].scrollIntoView(true);", elemento_deudas)
-                time.sleep(4)
+                time.sleep(2)
                 
                 # Intentar clic normal primero
                 elemento_deudas.click()
                 print("✓ Clic normal en '$ Deudas' realizado")
-                time.sleep(6)  # Esperar más tiempo para que cargue la tabla
+                time.sleep(3)  # Esperar más tiempo para que cargue la tabla
 
                 # USAR LA FUNCIÓN MEJORADA PARA CONFIGURAR SELECT
                 exito_select = configurar_select_100_mejorado(driver)
@@ -1226,7 +1301,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     # Intentar clic con JavaScript
                     driver.execute_script("arguments[0].click();", elemento_deudas)
                     print("✓ Clic con JavaScript realizado")
-                    time.sleep(6)
+                    time.sleep(2)
                 except Exception as e2:
                     print(f"Error en clic JavaScript: {e2}")
                     
@@ -1239,9 +1314,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print(f"\n--- CONFIGURANDO SELECT A 100 REGISTROS ---")
 
             try:
-                # Esperar 5 segundos antes de empezar a configurar
-                time.sleep(5)
-                print("✓ Esperando 5 segundos antes de configurar select...")
+                time.sleep(2)
+                print("✓ Esperando 2 segundos antes de configurar select...")
                 
                 # Esperar a que el select esté presente
                 WebDriverWait(driver, 15).until(
@@ -1273,8 +1347,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     if not select_element:
                         print("⚠ No se encontró el select, continuando sin cambiar...")
                         # Continuar sin el select, pero esperar antes de extraer datos
-                        time.sleep(3)
-                        print("✓ Esperando 3 segundos antes de extraer datos...")
+                        time.sleep(2)
+                        print("✓ Esperando 2 segundos antes de extraer datos...")
                     else:
                         # Procesar el select encontrado
                         pass
@@ -1320,8 +1394,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                     print("⚠ No se pudo cambiar el select, continuando...")
                     
                     # Esperar a que la tabla se actualice después del cambio
-                    time.sleep(7)
-                    print("✓ Esperando 7 segundos para que la tabla se actualice...")
+                    time.sleep(3)
+                    print("✓ Esperando 3 segundos para que la tabla se actualice...")
                     
                     # Verificar el cambio
                     try:
@@ -1341,15 +1415,15 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     except Exception as e:
                         print(f"Error verificando el cambio: {e}")
                 
-                # Esperar 3 segundos antes de empezar a extraer datos
-                time.sleep(3)
-                print("✓ Esperando 3 segundos antes de extraer datos de la tabla...")
+                # Esperar 2 segundos antes de empezar a extraer datos
+                time.sleep(2)
+                print("✓ Esperando 2 segundos antes de extraer datos de la tabla...")
 
             except Exception as e:
                 print(f"Error configurando select: {e}")
                 # En caso de error, al menos esperar antes de continuar
-                time.sleep(5)
-                print("✓ Esperando 5 segundos antes de continuar (por error en select)...")
+                time.sleep(2)
+                print("✓ Esperando 2 segundos antes de continuar (por error en select)...")
             
             # PASO 4: Extraer datos de la tabla (dentro del iframe) - VERSIÓN OPTIMIZADA
             print(f"\n--- EXTRAYENDO DATOS CON FILTROS COMPLETOS ---")
@@ -1405,8 +1479,24 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     'sicore-impto.a las ganancias',
                     'empleador-aportes seg. social',
                     'contribuciones seg. social',
-                    'ret art 79 ley gcias in a,byc',
-                    'renatea'
+                    'ret art 79 ley gcias inc a,byc',
+                    'renatea',
+                    'ganancias personas fisicas',
+                    'ganancia minima presunta',
+                    'seguro de vida colectivo',
+                    'regimenes de informacion',
+                    'imp s/deb y cred en cta cte',
+                    'presentac. dj ret. y/o percep',
+                    'contrib.vales aliment.l.24700',
+                    'aportes obra social',
+                    'aseg.riesgo de trabajo l 24557',
+                    'contribuciones obra social',
+                    'contribuciones renatea',
+                    'derecho exportacion servicios',
+                    'impto.s/bienes personales',
+                    'multas infracciones formales',
+                    'retenciones contrib.seg.social',
+                    'sicore - retenciones y percepc'
                 ]
                 
                 print(f"Filtros de impuestos: {impuestos_incluir}")
@@ -1442,11 +1532,11 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                     # Limpiar valores monetarios
                                     if nombre_columna in ['Saldo', 'Int. Resarcitorios', 'Int. Punitorio']:
                                         if not texto_celda or texto_celda in ['', '-', 'N/A']:
-                                            texto_celda = '0'
+                                            texto_celda = 0.0  # Mantener como float para cálculos
                                         else:
                                             # Limpiar formato monetario: $ 178.468,79 → 178468.79
                                             texto_limpio = texto_celda.replace('$', '').replace(' ', '').strip()
-
+                                            
                                             # Si tiene formato argentino (puntos como separadores de miles, coma como decimal)
                                             if ',' in texto_limpio and '.' in texto_limpio:
                                                 # Formato: 178.468,79 → 178468.79
@@ -1454,31 +1544,31 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                                 if len(partes) == 2:
                                                     parte_entera = partes[0].replace('.', '')
                                                     parte_decimal = partes[1]
-                                                    texto_celda = f"{parte_entera}.{parte_decimal}"
+                                                    texto_celda = float(f"{parte_entera}.{parte_decimal}")
                                                 else:
-                                                    texto_celda = texto_limpio.replace('.', '').replace(',', '.')
+                                                    texto_celda = float(texto_limpio.replace('.', '').replace(',', '.'))
                                             elif ',' in texto_limpio:
                                                 # Solo coma decimal: 1234,56 → 1234.56
-                                                texto_celda = texto_limpio.replace(',', '.')
+                                                texto_celda = float(texto_limpio.replace(',', '.'))
                                             elif '.' in texto_limpio:
                                                 # Verificar si es separador de miles o decimal
                                                 if len(texto_limpio.split('.')[-1]) <= 2:
                                                     # Probablemente decimal
-                                                    texto_celda = texto_limpio
+                                                    texto_celda = float(texto_limpio)
                                                 else:
                                                     # Probablemente separador de miles
-                                                    texto_celda = texto_limpio.replace('.', '')
+                                                    texto_celda = float(texto_limpio.replace('.', ''))
                                             else:
-                                                texto_celda = texto_limpio
+                                                texto_celda = float(texto_limpio) if texto_limpio else 0.0
+                                            
                                             # Validar que sea numérico
                                             try:
                                                 float(texto_celda)
-                                            except ValueError:
-                                                texto_celda = '0'
+                                            except (ValueError, TypeError):
+                                                texto_celda = 0.0
 
                                     datos_fila_completa[nombre_columna] = texto_celda
                                     print(f"  {nombre_columna} (col-{aria_colindex}): '{texto_celda}'")
-
                                 except Exception as e:
                                     # Manejo de errores por columna
                                     if nombre_columna in ['Saldo', 'Int. Resarcitorios', 'Int. Punitorio']:
@@ -1654,10 +1744,6 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
 
 # MODIFICACIÓN 2: Nueva función unificada para procesar cada cliente
 def procesar_cliente_completo(cuit_ingresar, cuit_representado, password, cliente, indice):
-    """
-    Función unificada que procesa completamente un cliente con sesión limpia.
-    SIEMPRE inicia con navegador nuevo y cierra todo al finalizar.
-    """
     print(f"\n{'='*80}")
     print(f"🚀 INICIANDO PROCESAMIENTO DE CLIENTE: {cliente}")
     print(f"📋 CUIT Login: {cuit_ingresar} | CUIT Representado: {cuit_representado}")
@@ -1757,10 +1843,6 @@ def forzar_guardado_excel(excel_file):
         excel.Quit()
 
 def ajustar_diseno_excel(ws):
-    """
-    Ajusta el diseño del archivo Excel para que todo el contenido (imagen y tabla) 
-    quepa en una sola página PDF.
-    """
     # Configurar ajuste de página para que quepa todo en una página
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
