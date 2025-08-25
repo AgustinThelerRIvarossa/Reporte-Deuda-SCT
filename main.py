@@ -11,14 +11,13 @@ from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as ExcelImage
 import win32com.client as win32
 from openpyxl.utils import get_column_letter
+from datetime import datetime
 import pandas as pd
 import time
-import pyautogui
 import os
 import glob
 import random
 import xlwings as xw
-import pdfkit
 import inspect
 import sys
 
@@ -364,17 +363,14 @@ def convertir_argentino_a_float(valor_str):
 
 def procesar_excel(excel_file, output_pdf, imagen):
     try:
-        # CORRECCIÓN: Definir nombre_archivo al inicio de la función
         nombre_archivo = os.path.basename(excel_file)
 
         # Limpiar el nombre temporal para extraer el cliente correctamente
         if nombre_archivo.startswith("temp_excel_"):
-            # Archivo temporal: temp_excel_3470 PRODUCCIONES SA.xlsx
             cliente = nombre_archivo.replace("temp_excel_", "").replace(".xlsx", "")
         elif " - " in nombre_archivo:
             cliente = nombre_archivo.split(" - ")[1].replace(".xlsx", "").replace(" - vacio", "")
         else:
-            # Fallback si el formato es diferente
             cliente = nombre_archivo.replace(".xlsx", "")
 
         # CORRECCIÓN: Limpiar cualquier sufijo "- vacio" del nombre del cliente para el título
@@ -382,18 +378,11 @@ def procesar_excel(excel_file, output_pdf, imagen):
         
         print(f"Procesando cliente: {cliente}")
 
-        # Cargar el archivo Excel con pandas
         df = pd.read_excel(excel_file)
 
-        # CAMBIO: Solo aplicar filtros si el archivo NO viene de exportar_desde_html
-        # Los archivos de exportar_desde_html ya vienen filtrados
         es_archivo_de_html = nombre_archivo.startswith("temp_excel_") or "temp_excel_" in excel_file
         
-        if not es_archivo_de_html:
-            # Aplicar filtros solo a archivos Excel originales (del bucle final)
-            print("Aplicando filtros a archivo Excel original...")
-            
-            # Definir la lista de impuestos a incluir en el filtro
+        if not es_archivo_de_html:            
             impuestos_incluir = [
                 'ganancias sociedades',
                 'iva',
@@ -421,7 +410,6 @@ def procesar_excel(excel_file, output_pdf, imagen):
                 'sicore - retenciones y percepc'
             ]
 
-            # Filtrar por múltiples tipos de "Impuesto"
             if 'Impuesto' in df.columns:
                 condicion_impuestos = df['Impuesto'].str.contains('|'.join(impuestos_incluir), case=False, na=False)
                 df_filtrado = df[condicion_impuestos].copy()
@@ -487,12 +475,11 @@ def procesar_excel(excel_file, output_pdf, imagen):
                 output_pdf = output_pdf.replace(".pdf", " - vacio.pdf")
             print(f"No se encontraron registros que cumplan con los criterios en {excel_file}")
 
-        # CORRECCIÓN: Eliminar todas las variantes de columnas innecesarias
         columnas_a_eliminar = [
             'Int. punitorios', 'Concepto / Subconcepto', 
-            'Int. punitorio', 'Int. Punitorio',           # Agregar esta variante
+            'Int. punitorio', 'Int. Punitorio',           
             'Concepto', 'Subconcepto', 'Establecimiento',
-            'Fecha_Procesamiento', 'Fuente'               # Agregar columnas metadata
+            'Fecha_Procesamiento', 'Fuente'               
         ]
 
         for columna in columnas_a_eliminar:
@@ -689,6 +676,15 @@ def procesar_excel(excel_file, output_pdf, imagen):
             celda_suma_int.number_format = '#,##0.00'
             celda_suma_int.font = Font(bold=True)
             celda_suma_int.alignment = Alignment(horizontal='right', vertical='center')
+
+            # AGREGAR FECHA ACTUAL EN FILA 30, COLUMNA INT. RESARCITORIOS
+            fecha_actual = datetime.now().strftime("%d/%m/%Y")
+            
+            celda_fecha = ws.cell(row=38, column=int_resarcitorios_col)
+            celda_fecha.value = fecha_actual
+            celda_fecha.alignment = Alignment(horizontal='right', vertical='center')
+            celda_fecha.font = Font(italic=True)
+            print(f"Fecha {fecha_actual} agregada en fila 30, columna Int. Resarcitorios")
 
         # Guardar los cambios
         wb.save(excel_file)
