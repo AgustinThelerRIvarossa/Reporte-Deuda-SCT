@@ -11,7 +11,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as ExcelImage
 import win32com.client as win32
 from openpyxl.utils import get_column_letter
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import time
 import os
@@ -45,6 +45,7 @@ download_list = df['Ubicacion descarga'].tolist()
 clientes_list = df['Cliente'].tolist()
 
 driver = None
+datos_consolidados = []
 
 def configurar_nuevo_navegador():
     global driver
@@ -89,14 +90,14 @@ def cerrar_sesion_y_navegador():
                     driver.switch_to.window(window_handles[i])
                     print(f"🗂️ Cerrando pestaña {i + 1}: {driver.title[:50]}...")
                     driver.close()
-                    time.sleep(2)
+                    time.sleep(1)
                 except Exception as e:
                     print(f"⚠️ Error cerrando pestaña {i + 1}: {e}")
             
             # Volver a la pestaña principal (índice 0)
             driver.switch_to.window(window_handles[0])
             print("✅ Vuelto a la pestaña principal")
-            time.sleep(2)
+            time.sleep(1)
         
         # PASO 3: Intentar cerrar sesión en AFIP desde la pestaña principal
         try:
@@ -105,12 +106,12 @@ def cerrar_sesion_y_navegador():
             # Buscar el icono de contribuyente AFIP
             icono_contribuyente = driver.find_element(By.ID, "iconoChicoContribuyenteAFIP")
             icono_contribuyente.click()
-            time.sleep(2)
+            time.sleep(1)
             
             # Buscar y hacer clic en el botón de salir
             boton_salir = driver.find_element(By.XPATH, '//*[@id="contBtnContribuyente"]/div[6]/button/div/div[2]')
             boton_salir.click()
-            time.sleep(2)
+            time.sleep(1)
             
             print("✅ Sesión cerrada exitosamente en AFIP")
             
@@ -141,7 +142,7 @@ resultados = []
 def human_typing(element, text):
     for char in str(text):
         element.send_keys(char)
-        time.sleep(random.uniform(0.01, 0.05))
+        time.sleep(random.uniform(0.01, 0.02))
 
 def actualizar_excel(row_index, mensaje):
     """Actualiza la última columna del archivo Excel con un mensaje de error."""
@@ -680,6 +681,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
             # AGREGAR FECHA ACTUAL EN FILA 30, COLUMNA INT. RESARCITORIOS
             fecha_actual = datetime.now().strftime("%d/%m/%Y")
             
+            # row 38 original
             celda_fecha = ws.cell(row=38, column=int_resarcitorios_col)
             celda_fecha.value = fecha_actual
             celda_fecha.alignment = Alignment(horizontal='right', vertical='center')
@@ -723,6 +725,20 @@ def procesar_excel(excel_file, output_pdf, imagen):
         wb.Close(False)
         print(f"Archivo convertido a PDF: {output_pdf}")
 
+        # GUARDAR DATOS PARA CONSOLIDACIÓN (solo si hay datos después del filtrado)
+        if df_filtrado.shape[0] > 0:
+            global datos_consolidados
+            
+            # Agregar columna Cliente
+            df_con_cliente = df_filtrado.copy()
+            df_con_cliente.insert(0, 'Cliente', cliente_titulo)
+            
+            # Convertir a lista de diccionarios y agregar a consolidados
+            for _, fila in df_con_cliente.iterrows():
+                datos_consolidados.append(fila.to_dict())
+            
+            print(f"✓ {len(df_filtrado)} registros de {cliente_titulo} agregados para consolidación")
+
     except Exception as e:
         print(f"Error al procesar {excel_file}: {e}")
         import traceback
@@ -737,11 +753,11 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
         driver.get('https://auth.afip.gob.ar/contribuyente_/login.xhtml')
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:username')))
         element.clear()
-        time.sleep(2)
+        time.sleep(1)
 
         human_typing(element, cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(2)
+        time.sleep(1)
 
         # Verificar si el CUIT es incorrecto
         try:
@@ -754,9 +770,9 @@ def iniciar_sesion(cuit_ingresar, password, row_index):
 
         element_pass = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'F1:password')))
         human_typing(element_pass, password)
-        time.sleep(3)
-        driver.find_element(By.ID, 'F1:btnIngresar').click()
         time.sleep(2)
+        driver.find_element(By.ID, 'F1:btnIngresar').click()
+        time.sleep(1)
 
         # Verificar si la contraseña es incorrecta
         try:
@@ -780,19 +796,19 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     boton_ver_todos = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Ver todos")))
     if boton_ver_todos:
         boton_ver_todos.click()
-        time.sleep(2)
+        time.sleep(1)
 
     # Buscar input del buscador y escribir
     buscador = driver.find_element(By.ID, 'buscadorInput')
     if buscador:
         human_typing(buscador, 'tas tr') 
-        time.sleep(2)
+        time.sleep(1)
 
     # Seleccionar la opción del menú
     opcion_menu = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, 'rbt-menu-item-0')))
     if opcion_menu:
         opcion_menu.click()
-        time.sleep(2)
+        time.sleep(1)
 
     # Manejar modal si aparece
     modales = driver.find_elements(By.CLASS_NAME, 'modal-content')
@@ -800,7 +816,7 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
         boton_continuar = driver.find_element(By.XPATH, '//button[text()="Continuar"]')
         if boton_continuar:
             boton_continuar.click()
-            time.sleep(2)
+            time.sleep(1)
 
     # Cambiar a la última pestaña abierta
     driver.switch_to.window(driver.window_handles[-1])
@@ -810,23 +826,23 @@ def ingresar_modulo(cuit_ingresar, password, row_index):
     if error_message_elements and error_message_elements[0].text == "Ha ocurrido un error al autenticar, intente nuevamente.":
         actualizar_excel(row_index, "Error autenticacion")
         driver.refresh()
-        time.sleep(2)
+        time.sleep(1)
 
     # Verificar si es necesario iniciar sesión nuevamente
     username_input = driver.find_elements(By.ID, 'F1:username')
     if username_input:
         username_input[0].clear()
-        time.sleep(2)
+        time.sleep(1)
         human_typing(username_input[0], cuit_ingresar)
         driver.find_element(By.ID, 'F1:btnSiguiente').click()
-        time.sleep(2)
+        time.sleep(1)
 
         password_input = driver.find_elements(By.ID, 'F1:password')
         if password_input:
             human_typing(password_input[0], password)
-            time.sleep(2)
+            time.sleep(1)
             driver.find_element(By.ID, 'F1:btnIngresar').click()
-            time.sleep(2)
+            time.sleep(1)
             actualizar_excel(row_index, "Error volver a iniciar sesion")
 
 def seleccionar_cuit_representado(cuit_representado):
@@ -864,8 +880,8 @@ def configurar_select_100_mejorado(driver):
     
     try:
         # Esperar inicial
-        time.sleep(2)
-        print("✓ Esperando 2 segundos antes de configurar select...")
+        time.sleep(1)
+        print("✓ Esperando 1 segundos antes de configurar select...")
         
         # ESTRATEGIA 1: Buscar el select con múltiples selectores
         select_element = None
@@ -902,7 +918,7 @@ def configurar_select_100_mejorado(driver):
         
         if not select_element:
             print("✗ No se encontró ningún select, continuando sin cambio...")
-            time.sleep(2)
+            time.sleep(1)
             return False
         
         # ESTRATEGIA 2: Analizar el select encontrado
@@ -910,7 +926,7 @@ def configurar_select_100_mejorado(driver):
         
         # Hacer scroll al elemento
         driver.execute_script("arguments[0].scrollIntoView(true);", select_element)
-        time.sleep(2)
+        time.sleep(1)
         
         # Obtener información del select
         current_value = select_element.get_attribute('value')
@@ -940,7 +956,7 @@ def configurar_select_100_mejorado(driver):
         # Verificar si ya está en 100
         if current_value == "100":
             print("✓ Select ya está configurado en 100")
-            time.sleep(2)
+            time.sleep(1)
             return True
         
         # ESTRATEGIA 4: Buscar la opción 100
@@ -972,7 +988,7 @@ def configurar_select_100_mejorado(driver):
                         break
             else:
                 print("✗ No se encontraron opciones válidas")
-                time.sleep(2)
+                time.sleep(1)
                 return False
         else:
             target_value = "100"
@@ -989,7 +1005,7 @@ def configurar_select_100_mejorado(driver):
                 from selenium.webdriver.support.ui import Select
                 select_obj = Select(select_element)
                 select_obj.select_by_index(target_index)
-                time.sleep(2)
+                time.sleep(1)
                 
                 new_value = select_element.get_attribute('value')
                 if new_value == target_value:
@@ -1004,7 +1020,7 @@ def configurar_select_100_mejorado(driver):
         # ESTRATEGIA 6: Verificación visual y de DOM
         if exito_cambio:
             print(f"\n--- VERIFICANDO CAMBIO ---")
-            time.sleep(2)
+            time.sleep(1)
             
             # Verificar valor del select
             valor_final = select_element.get_attribute('value')
@@ -1039,14 +1055,14 @@ def configurar_select_100_mejorado(driver):
                 print(f"No se pudo contar filas visibles: {e}")
         
         # Esperar antes de continuar
-        print("✓ Esperando 2 segundos antes de extraer datos...")
-        time.sleep(2)
+        print("✓ Esperando 1 segundos antes de extraer datos...")
+        time.sleep(1)
         
         return exito_cambio
         
     except Exception as e:
         print(f"✗ Error general configurando select: {e}")
-        time.sleep(2)
+        time.sleep(1)
         return False
 
 def verificar_columnas_finales(df, cliente):
@@ -1081,7 +1097,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         print(f"Título de la página: {driver.title}")
         
         # Esperar a que la página se cargue completamente
-        time.sleep(2)
+        time.sleep(1)
         # PASO 1: Verificar si hay iframe y cambiar a él
         print(f"\n--- VERIFICANDO Y CAMBIANDO AL IFRAME ---")
         
@@ -1101,7 +1117,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print("✓ Cambiado al iframe exitosamente")
             
             # Esperar a que el contenido del iframe se cargue COMPLETAMENTE
-            time.sleep(3)  # Aumentar tiempo de espera
+            time.sleep(2)  # Aumentar tiempo de espera
             
             # Esperar a que Vue.js termine de renderizar
             WebDriverWait(driver, 20).until(
@@ -1279,12 +1295,12 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             try:
                 # Hacer scroll al elemento para asegurar que esté visible
                 driver.execute_script("arguments[0].scrollIntoView(true);", elemento_deudas)
-                time.sleep(2)
+                time.sleep(1)
                 
                 # Intentar clic normal primero
                 elemento_deudas.click()
                 print("✓ Clic normal en '$ Deudas' realizado")
-                time.sleep(3)  # Esperar más tiempo para que cargue la tabla
+                time.sleep(2)  # Esperar más tiempo para que cargue la tabla
 
                 # USAR LA FUNCIÓN MEJORADA PARA CONFIGURAR SELECT
                 exito_select = configurar_select_100_mejorado(driver)
@@ -1297,7 +1313,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                     # Intentar clic con JavaScript
                     driver.execute_script("arguments[0].click();", elemento_deudas)
                     print("✓ Clic con JavaScript realizado")
-                    time.sleep(2)
+                    time.sleep(1)
                 except Exception as e2:
                     print(f"Error en clic JavaScript: {e2}")
                     
@@ -1310,8 +1326,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print(f"\n--- CONFIGURANDO SELECT A 100 REGISTROS ---")
 
             try:
-                time.sleep(2)
-                print("✓ Esperando 2 segundos antes de configurar select...")
+                time.sleep(1)
+                print("✓ Esperando 1 segundos antes de configurar select...")
                 
                 # Esperar a que el select esté presente
                 WebDriverWait(driver, 15).until(
@@ -1390,8 +1406,8 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                                     print("⚠ No se pudo cambiar el select, continuando...")
                     
                     # Esperar a que la tabla se actualice después del cambio
-                    time.sleep(3)
-                    print("✓ Esperando 3 segundos para que la tabla se actualice...")
+                    time.sleep(2)
+                    print("✓ Esperando 2 segundos para que la tabla se actualice...")
                     
                     # Verificar el cambio
                     try:
@@ -1467,7 +1483,6 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
              
                 print(f"Mapeo completo definido: {len(mapeo_columnas_completo)} columnas")
 
-                # FILTROS DE IMPUESTOS (igual que en procesar_excel)
                 impuestos_incluir = [
                     'ganancias sociedades',
                     'iva',
@@ -1498,7 +1513,6 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
                 print(f"Filtros de impuestos: {impuestos_incluir}")
                 
                 # CONFIGURAR FECHAS PARA FILTRO
-                from datetime import datetime, timedelta
                 fecha_actual = datetime.now().date()
                 año_actual = fecha_actual.year
                 fecha_inicio = datetime(year=año_actual - 7, month=1, day=1).date()
@@ -1727,6 +1741,18 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         
         print(f"✓ PDF generado: {ruta_pdf}")
 
+        # GUARDAR DATOS PARA CONSOLIDACIÓN (solo si hay datos)
+        if datos_tabla:
+            global datos_consolidados
+            
+            # Agregar columna Cliente a cada fila
+            for fila in datos_tabla:
+                fila_con_cliente = {'Cliente': cliente}
+                fila_con_cliente.update(fila)
+                datos_consolidados.append(fila_con_cliente)
+            
+            print(f"✓ {len(datos_tabla)} registros de {cliente} agregados para consolidación")
+
     except Exception as e:
         print(f"✗ ERROR GENERAL: {e}")
         import traceback
@@ -1737,6 +1763,55 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             driver.switch_to.default_content()
         except:
             pass
+
+def generar_excel_consolidado():
+    # Genera el archivo Excel consolidado con todos los datos de clientes que tienen deudas.
+    global datos_consolidados
+    
+    print(f"\n--- GENERANDO EXCEL CONSOLIDADO ---")
+    print(f"Total registros a consolidar: {len(datos_consolidados)}")
+    
+    if not datos_consolidados:
+        print("⚠ No hay datos para consolidar")
+        return
+    
+    try:
+        # Crear DataFrame consolidado
+        df_consolidado = pd.DataFrame(datos_consolidados)
+        
+        # Definir orden de columnas esperado
+        columnas_ordenadas = ['Cliente', 'Impuesto', 'Período', 'Ant/Cuota', 'Vencimiento', 'Saldo', 'Int. Resarcitorios']
+        
+        # Reordenar columnas (solo las que existan)
+        columnas_existentes = [col for col in columnas_ordenadas if col in df_consolidado.columns]
+        df_consolidado = df_consolidado[columnas_existentes]
+        
+        # Eliminar columnas no deseadas si existen
+        columnas_eliminar = ['Establecimiento', 'Concepto', 'Subconcepto', 'Int. Punitorio', 'Fecha_Procesamiento', 'Fuente']
+        for col in columnas_eliminar:
+            if col in df_consolidado.columns:
+                df_consolidado = df_consolidado.drop(col, axis=1)
+        
+        # Ruta del archivo consolidado
+        ruta_consolidado = os.path.join(base_dir, "data", "DeudaConsolidada.xlsx")
+        
+        # Guardar Excel
+        df_consolidado.to_excel(ruta_consolidado, index=False)
+        
+        print(f"✅ Excel consolidado generado: {ruta_consolidado}")
+        print(f"   - Clientes incluidos: {df_consolidado['Cliente'].nunique()}")
+        print(f"   - Total registros: {len(df_consolidado)}")
+        
+        # Mostrar resumen por cliente
+        resumen_por_cliente = df_consolidado['Cliente'].value_counts()
+        print(f"   - Distribución por cliente:")
+        for cliente, cantidad in resumen_por_cliente.items():
+            print(f"     {cliente}: {cantidad} registros")
+        
+    except Exception as e:
+        print(f"❌ Error generando Excel consolidado: {e}")
+        import traceback
+        traceback.print_exc()
 
 # MODIFICACIÓN 2: Nueva función unificada para procesar cada cliente
 def procesar_cliente_completo(cuit_ingresar, cuit_representado, password, cliente, indice):
@@ -1900,3 +1975,13 @@ for excel_file in glob.glob(os.path.join(input_folder_excel, "*.xlsx")):
 print("=" * 60)
 print("🎉 PROCESO COMPLETADO - ARCHIVOS EXCEL LOCALES")
 print("=" * 60)
+
+print("\n" + "="*60)
+print("📊 GENERANDO EXCEL CONSOLIDADO DE DEUDAS")
+print("="*60)
+
+generar_excel_consolidado()
+
+print("\n" + "="*60)
+print("🎉 PROCESO COMPLETADO - TODOS LOS ARCHIVOS GENERADOS")
+print("="*60)
