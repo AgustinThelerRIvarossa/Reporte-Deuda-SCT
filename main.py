@@ -29,7 +29,6 @@ input_folder_excel = os.path.join(base_dir, "data", "input", "Deudas")
 output_folder_csv = os.path.join(base_dir, "data", "input", "DeudasCSV")
 output_file_csv = os.path.join(base_dir, "data", "Resumen_deudas.csv")
 output_file_xlsx = os.path.join(base_dir, "data", "Resumen_deudas.xlsx")
-
 output_folder_pdf = os.path.join(base_dir, "data", "Reportes")
 imagen = os.path.join(base_dir, "data", "imagen.png")
 
@@ -681,7 +680,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
             # AGREGAR FECHA ACTUAL EN FILA 30, COLUMNA INT. RESARCITORIOS
             fecha_actual = datetime.now().strftime("%d/%m/%Y")
             
-            # row 38 original
+            # row 38 original 
             celda_fecha = ws.cell(row=38, column=int_resarcitorios_col)
             celda_fecha.value = fecha_actual
             celda_fecha.alignment = Alignment(horizontal='right', vertical='center')
