@@ -724,7 +724,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
         wb.Close(False)
         print(f"Archivo convertido a PDF: {output_pdf}")
 
-        # GUARDAR DATOS PARA CONSOLIDACIÓN (solo si hay datos después del filtrado)
+        """ GUARDAR DATOS PARA CONSOLIDACIÓN (solo si hay datos después del filtrado)
         if df_filtrado.shape[0] > 0:
             global datos_consolidados
             
@@ -736,7 +736,7 @@ def procesar_excel(excel_file, output_pdf, imagen):
             for _, fila in df_con_cliente.iterrows():
                 datos_consolidados.append(fila.to_dict())
             
-            print(f"✓ {len(df_filtrado)} registros de {cliente_titulo} agregados para consolidación")
+            print(f"✓ {len(df_filtrado)} registros de {cliente_titulo} agregados para consolidación")"""
 
     except Exception as e:
         print(f"Error al procesar {excel_file}: {e}")
