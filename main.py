@@ -294,7 +294,7 @@ def generar_pdf_desde_dataframe(df, cliente, ruta_pdf):
         print(f"\n--- GENERANDO PDF PARA {cliente} ---")
         
         # Crear Excel temporal para usar la función existente
-        temp_excel = ruta_pdf.replace('.pdf', '.xlsx').replace('Reporte - ', 'temp_excel_')
+        temp_excel = ruta_pdf.replace('.pdf', '.xlsx').replace('Reporte Deuda - ', 'temp_excel_')
         
         if len(df) > 0:
             df.to_excel(temp_excel, index=False)
@@ -1271,7 +1271,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
             print("✗ No se encontró el elemento '$ Deudas'")
             
             # Generar PDF vacío y salir
-            nombre_pdf = f"Reporte - {cliente} - sin_deudas.pdf"
+            nombre_pdf = f"Reporte Deuda - {cliente} - sin_deudas.pdf"
             ruta_pdf = os.path.join(ubicacion_descarga, nombre_pdf)
             
             df_vacio = pd.DataFrame()
@@ -1713,7 +1713,7 @@ def exportar_desde_html(ubicacion_descarga, cuit_representado, cliente):
         # PASO 6: Generar PDF
         print(f"\n--- GENERANDO PDF ---")
         
-        nombre_pdf = f"Reporte - {cliente}"
+        nombre_pdf = f"Reporte Deuda - {cliente}"
         if not datos_tabla:  # Si no hay datos
             nombre_pdf += " - vacio"
         nombre_pdf += ".pdf"
